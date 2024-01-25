@@ -1,0 +1,7 @@
+.hypothesis/*
+benchmark/xmlcnn/model/__pycache__/*
+src/fx_plus/__pycache__/*
+src/fx_plus/helper/__pycache__/*
+src/fx_plus/models/__pycache__/*
+src/fx_plus/models/tablegen/__pycache__/*
+src/fx_plus.egg-info/*

@@ -1,0 +1,96 @@
+
+from model.xmlcnn_impl import XMLCNN as XMLCNNImpl
+
+import json
+import torch
+
+class emptyAttributeCls:
+    pass
+
+class XMLCNN(XMLCNNImpl):
+    """
+    The XML-CNN comes from the paper Deep Learning for Extreme Multi-label Text
+    Classification with dynamic pooling
+    """
+    def __init__(self, config_json: str):
+        # config_json: path to the json file containing the model configuration
+        
+        with open(config_json, 'r') as file:
+            config_dict = json.load(file)
+        
+        # Parse the initiate arguments
+        init_args = {}
+        init_args["config"] = self._parse_config(config_dict)
+        super().__init__(**init_args)
+        
+        # Parse the runtime arguments
+
+        self.batch_size = self._parse_batch_size(config_dict)
+
+
+    def get_sample_inputs(self):
+        # generate the example inputs for profiling and verification
+
+        # Input embedding
+        e_emb = torch.randn(
+            size=(self.batch_size, self.sequence_length, self.embedding_dim), dtype=torch.float, device="cuda"
+        )
+        # Binary labels
+        y = torch.randint(
+            size=(self.batch_size, self.y_dim), dtype=torch.float, device="cuda", low=0, high=2
+        )
+        return e_emb, y
+
+    def _parse_config(self, config_dict: dict):
+        # config_dict: the dictionary parsed from json file
+        attr_cls = emptyAttributeCls()
+        setattr(attr_cls, "sequence_length", self._parse_sequence_length(config_dict))
+        setattr(attr_cls, "embedding_dim", self._parse_embedding_dim(config_dict))
+        setattr(attr_cls, "filter_sizes", self._parse_filter_sizes(config_dict))
+        setattr(attr_cls, "num_filters", self._parse_num_filters(config_dict))
+        setattr(attr_cls, "hidden_dims", self._parse_hidden_dims(config_dict))
+        setattr(attr_cls, "y_dim", self._parse_y_dim(config_dict))
+        self.config = attr_cls
+        return self.config
+
+    def _parse_sequence_length(self, config_dict: dict):
+        # Sequence length of the inputs
+        # config_dict: the dictionary parsed from json file
+        self.sequence_length = config_dict["sequence_length"]
+        return self.sequence_length
+
+    def _parse_embedding_dim(self, config_dict: dict):
+        # The dimension of the embedding
+        # config_dict: the dictionary parsed from json file
+        self.embedding_dim = config_dict["embedding_dim"]
+        return self.embedding_dim
+
+    def _parse_filter_sizes(self, config_dict: dict):
+        # A list containing the size of filters
+        # config_dict: the dictionary parsed from json file
+        return config_dict["filter_sizes"]
+
+    def _parse_num_filters(self, config_dict: dict):
+        # Number of output channels of convolution layers
+        # config_dict: the dictionary parsed from json file
+        self.num_filters = config_dict["num_filters"]
+        return self.num_filters
+
+    def _parse_hidden_dims(self, config_dict: dict):
+        # Fc layer's hidden dimension
+        # config_dict: the dictionary parsed from json file
+        self.hidden_dims = config_dict["hidden_dims"]
+        return self.hidden_dims
+
+    def _parse_y_dim(self, config_dict: dict):
+        # Number of classification classes
+        # config_dict: the dictionary parsed from json file
+        self.y_dim = config_dict["y_dim"]
+        return self.y_dim
+
+    def _parse_batch_size(self, config_dict: dict):
+        # Batch size of the input
+        # config_dict: the dictionary parsed from json file
+        self.batch_size = config_dict["batch_size"]
+        return self.batch_size
+

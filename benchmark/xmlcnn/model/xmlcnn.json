@@ -1,0 +1,9 @@
+{
+    "sequence_length": <[int]Sequence length of the inputs>,
+    "embedding_dim": <[int]The dimension of the embedding>,
+    "filter_sizes": <[list]A list containing the size of filters>,
+    "num_filters": <[int]Number of output channels of convolution layers>,
+    "hidden_dims": <[int]Fc layer's hidden dimension>,
+    "y_dim": <[int]Number of classification classes>,
+    "batch_size": <[int]Batch size of the input>,
+}
