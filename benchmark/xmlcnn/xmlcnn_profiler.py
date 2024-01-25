@@ -28,7 +28,6 @@ from functools import partial
 #     pass_print_graph)
 from torch.profiler import profile, ProfilerActivity, record_function
 import argparse
-from model_zoo import Config
 import os
 import pdb
 
@@ -52,41 +51,48 @@ class XMLCNN_Profile(BaseTestCase):
     """
     cls = XMLCNN
     
-    def __call__(self, verify=False):
+    def __call__(self, verify=False, profiling=True):
         """
         Launch the profiling and verification
+        # if Profile:
+        # model, input, optimizer => warmup, profile
+        # if verify
+        # model, ref_model, optimizer, input => compare
+        # return assertTrue
         """
         # Create the sample inputs
         # sample_inputs = xmlcnn_input(self.config)
-        file_path = os.path.abspath(os.path.dirname(__file__))
-        joined_path = os.path.join(file_path, "xmlcnn.json")
-        model = XMLCNN(joined_path)
+        # file_path = os.path.abspath(os.path.dirname(__file__))
+        # joined_path = os.path.join(file_path, "xmlcnn.json")
+        model = XMLCNN(self.config).to("cuda")
         sample_inputs = model.get_sample_inputs()
 
         optimizer = self.get_optimizer(model)
 
-        # if verify:
-        #     ref
-        # model, optimizer = apex_autocast(
-        #     model, optimizer, False
-        # )
-
-        # Warmup
-        for _ in range(10):
+        if verify:
+            reference_model = self.get_reference_model(model).to("cuda")
+            optimizer_ref = self.get_optimizer(reference_model)
             self.run_model(model, optimizer, sample_inputs)
-        
-        with profile(activities=[ProfilerActivity.CUDA], record_shapes=True) as prof:
+            self.run_model(reference_model, optimizer_ref, sample_inputs)
+            # Call compare function
+            self.compare(reference_model, model)
+
+        if profiling:
+            # Warmup
             for _ in range(10):
                 self.run_model(model, optimizer, sample_inputs)
+            # Run profiling
+            with profile(activities=[ProfilerActivity.CUDA], record_shapes=True) as prof:
+                for _ in range(10):
+                    self.run_model(model, optimizer, sample_inputs)
 
         print(prof.key_averages().table(sort_by="cuda_time_total"))
-    
-    def verify():
-        pass_clean_up
+
 if __name__ == '__main__':
     ################################################################################
     # parse args
     parser = argparse.ArgumentParser(description="XMLCNN End-to-End Training with CUDA Graph")
+    parser.add_argument('--json_path', '-f', type=str, help="Path to json file")
     parser.add_argument('--iter', '-it', type=int, default=50, help="Profiling Iterations")
     # Hyper-parameter that defines the model size
     parser.add_argument('--batch_size', '-b', type=int, default=32, help="Training batch size per GPU")
@@ -96,7 +102,5 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     ################################################################################
-    file_path = os.path.abspath(os.path.dirname(__file__))
-    joined_path = os.path.join(file_path, "xmlcnn.json")
-    profiler = XMLCNN_Profile(joined_path)
-    profiler()
+    profiler = XMLCNN_Profile(args.json_path)
+    profiler(verify=True)

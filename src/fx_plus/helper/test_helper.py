@@ -23,7 +23,6 @@ from torch.fx.passes.shape_prop import ShapeProp
 import re
 from torch.profiler import ProfilerActivity, record_function
 from torch.profiler import profile as torch_profile
-from model_zoo import Config
 
 
 class BaseTestCase(unittest.TestCase):
@@ -34,7 +33,8 @@ class BaseTestCase(unittest.TestCase):
             config_path: str, absolute path to the json config file
         """
         super().__init__(methodName)
-        self.config = Config(config_file)
+        # self.config = Config(config_file)
+        self.config = config_file
         
     def __call__(self, *args, **kwargs):
         """
@@ -69,7 +69,5 @@ class BaseTestCase(unittest.TestCase):
         for(param_ref, param_target) in zip(list(reference.named_parameters()), list(model.named_parameters())):
             grad_ref = param_ref[1].grad
             grad_target = self.grad_preprocess(param_target[1].grad)
-            print(grad_ref)
-            print(grad_target)
-            break
+            self.assertTrue(torch.allclose(grad_ref, grad_target))
     
