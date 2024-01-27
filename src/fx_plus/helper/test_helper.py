@@ -19,10 +19,11 @@ import torch
 import logging
 from torch.fx import symbolic_trace
 from torch.fx.passes.shape_prop import ShapeProp
+from fx_plus import fxp_backend
 # from gtl.compiler.passes import pass_print_graph
 import re
 from torch.profiler import ProfilerActivity, record_function
-from torch.profiler import profile as torch_profile
+from torch.profiler import profile
 
 
 class BaseTestCase(unittest.TestCase):
@@ -33,17 +34,47 @@ class BaseTestCase(unittest.TestCase):
             config_path: str, absolute path to the json config file
         """
         super().__init__(methodName)
-        # self.config = Config(config_file)
         self.config = config_file
         
-    def __call__(self, *args, **kwargs):
+    def __call__(self, verify, profiling=True, *args, **kwargs):
         """
         Launch the profiling and verification
+        # if Profile:
+        # model, input, optimizer => warmup, profile
+        # if verify
+        # model, ref_model, optimizer, input => compare
+        # return assertTrue
         """
         model = self.cls(self.config).to("cuda")
-        reference = self.cls(self.config).to("cuda")
+        # reference = self.cls(self.config).to("cuda")
+        sample_inputs = model.get_sample_inputs()
         
+        optimizer = self.get_optimizer(model)
+        if verify:
+            reference_model = self.get_reference_model(model).to("cuda")
+            optimizer_ref = self.get_optimizer(reference_model)
+        
+        # Optimize
+        model = torch.compile(
+            model, fullgraph=True, dynamic=False, backend=fxp_backend)
+        
+        if verify:
+            self.run_model(model, optimizer, sample_inputs)
+            self.run_model(reference_model, optimizer_ref, sample_inputs)
+            # Call compare function
+            self.compare(reference_model, model)
+            
+        if profiling:
+            # Warmup
+            for _ in range(10):
+                self.run_model(model, optimizer, sample_inputs)
+            # Run profiling
+            with profile(activities=[ProfilerActivity.CUDA], record_shapes=True) as prof:
+                for _ in range(10):
+                    self.run_model(model, optimizer, sample_inputs)
 
+        print(prof.key_averages().table(sort_by="cuda_time_total"))
+        
     @staticmethod
     def run_model(model, optimizer, sample_inputs):
         model.train()
@@ -70,4 +101,4 @@ class BaseTestCase(unittest.TestCase):
             grad_ref = param_ref[1].grad
             grad_target = self.grad_preprocess(param_target[1].grad)
             self.assertTrue(torch.allclose(grad_ref, grad_target))
-    
+

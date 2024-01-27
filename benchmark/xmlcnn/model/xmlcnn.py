@@ -1,5 +1,7 @@
 
-from model.xmlcnn_impl import XMLCNN as XMLCNNImpl
+from xmlcnn_impl import XMLCNN as XMLCNNImpl
+from fx_plus.helper import BaseTestCase
+import argparse
 
 import json
 import torch
@@ -93,4 +95,19 @@ class XMLCNN(XMLCNNImpl):
         # config_dict: the dictionary parsed from json file
         self.batch_size = config_dict["batch_size"]
         return self.batch_size
+
+class XMLCNN_Profile(BaseTestCase):
+    """
+    Profile and verify the XMLCNN model
+    """
+    cls = XMLCNN
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description="XMLCNN End-to-End Training with CUDA Graph")
+    parser.add_argument('--json_path', '-f', type=str, required=True, help="Path to json file")
+    args = parser.parse_args()
+
+    ###########################################################################
+    profiler = XMLCNN_Profile(args.json_path)
+    profiler(verify=True)
 

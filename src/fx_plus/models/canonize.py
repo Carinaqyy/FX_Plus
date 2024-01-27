@@ -62,19 +62,42 @@ def canonize_models():
     td_file = os.path.join(args.model_dir, td_file)
     # Generate model file and json file
     front_end_str, json_str, model_name = parse_td(td_file)
+    
+    # Add profiling and verification string
+    profiling_str = f"""
+class {model_name}_Profile(BaseTestCase):
+    \"""
+    Profile and verify the {model_name} model
+    \"""
+    cls = {model_name}
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description="XMLCNN End-to-End Training with CUDA Graph")
+    parser.add_argument('--json_path', '-f', type=str, required=True, help="Path to json file")
+    args = parser.parse_args()
+
+    ###########################################################################
+    profiler = {model_name}_Profile(args.json_path)
+    profiler(verify=True)
+"""
+
     # Add extra header
     front_end_str = f"""
-from model.{impl_file[:-3]} import {model_name} as {model_name}Impl
-""" + front_end_str
+from {impl_file[:-3]} import {model_name} as {model_name}Impl
+from fx_plus.helper import BaseTestCase
+import argparse
+""" + front_end_str + profiling_str
+
+    # Add model frontend file (containing profiling and verification)
     model_file_name = model_name.lower() + ".py"
     full_model_file_name = os.path.join(args.model_dir, model_file_name)
     frontend_file_generator = StringToFileGenerator(file_name=full_model_file_name)
     frontend_file_generator.generate_file(front_end_str)
     
+    # Add json file
     json_file_name = model_name.lower() + ".json"
     full_json_file_name = os.path.join(args.model_dir, json_file_name)
     json_file_generator = StringToFileGenerator(file_name=full_json_file_name)
     json_file_generator.generate_file(json_str)
-    
     
     

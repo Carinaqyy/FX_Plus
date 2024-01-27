@@ -5,3 +5,5 @@ src/fx_plus/helper/__pycache__/*
 src/fx_plus/models/__pycache__/*
 src/fx_plus/models/tablegen/__pycache__/*
 src/fx_plus.egg-info/*
+src/fx_plus/compiler/__pycache__/__init__.cpython-310.pyc
+src/fx_plus/compiler/__pycache__/backend.cpython-310.pyc

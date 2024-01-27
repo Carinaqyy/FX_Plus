@@ -1,5 +1,5 @@
 ###############################################################################
-# Copyright [Carina Quan]
+# Copyright [Carina Quan] [name of copyright owner]
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,5 +13,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 ###############################################################################
-from fx_plus.models import canonize_models
-from fx_plus.compiler import fxp_backend
+from torch._dynamo.backends.common import aot_autograd
+from fx_plus.compiler.backend import partition_fn, default_compiler
+
+fxp_backend = aot_autograd(
+    fw_compiler=default_compiler, 
+    bw_compiler=default_compiler,
+    partition_fn=partition_fn)
