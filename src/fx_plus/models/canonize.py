@@ -29,6 +29,7 @@ def canonize_models():
         "-d", "--model_dir", type=str, required=True, 
         help="directory to the model implementation")
     
+    # Indicate unittest mode / training mode
     parser.add_argument(
         "--unittest", action='store_true', 
         help="specify unittest mode")
@@ -71,40 +72,70 @@ def canonize_models():
     if require_json:
         json_prompt = "args.json_path"
     # Add profiling and verification string
-    profiling_str = f"""
+    profiling_str1 = f"""
 class {model_name}_Profile({mode}):
     \"""
     Profile and verify the {model_name} model
     \"""
     cls = {model_name}
+"""
 
+    profiling_str2 = f"""
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="XMLCNN End-to-End Training with CUDA Graph")
     parser.add_argument('--json_path', '-f', type=str, required=False, help="Path to json file")
     args = parser.parse_args()
 
     ###########################################################################
+"""
+
+    profiling_str3 = f"""
     profiler = {model_name}_Profile({json_prompt})
     profiler(verify=True)
 """
 
+    profiling_str = ""
+    for model in model_name:
+        profiling_str += f"""
+class {model}_Profile({mode}):
+    \"""
+    Profile and verify the {model} model
+    \"""
+    cls = {model}
+"""
+    profiling_str += profiling_str2
+    for model in model_name:
+        profiling_str += f"""
+    profiler = {model}_Profile({json_prompt})
+    profiler(verify=True)
+"""
+    print("Profiling_str")
+    print(profiling_str)
+
     # Add extra header
-    front_end_str = f"""
-from {impl_file[:-3]} import {model_name} as {model_name}Impl
-from fx_plus.helper import BaseTestCase, UnitTestBase
+    
+    # Add model name
+    import_model_str = ""
+    for model in model_name:
+        import_model_str += f"""
+from {impl_file[:-3]} import {model} as {model}Impl"""
+    # Add helper header
+    front_end_str = import_model_str + f"""
+from fx_plus.helper import BaseTestCase, UnitTestBase, emptyAttributeCls
 import argparse
 """ + front_end_str + profiling_str
 
     # Add model frontend file (containing profiling and verification)
-    model_file_name = model_name.lower() + ".py"
+    model_file_name = impl_file[:-8].lower() + ".py"
     full_model_file_name = os.path.join(args.model_dir, model_file_name)
     frontend_file_generator = StringToFileGenerator(file_name=full_model_file_name)
     frontend_file_generator.generate_file(front_end_str)
-    
+
     # Add json file
-    json_file_name = model_name.lower() + ".json"
-    full_json_file_name = os.path.join(args.model_dir, json_file_name)
-    json_file_generator = StringToFileGenerator(file_name=full_json_file_name)
-    json_file_generator.generate_file(json_str)
+    if require_json:
+        json_file_name = impl_file[:-5].lower() + ".py"
+        full_json_file_name = os.path.join(args.model_dir, json_file_name)
+        json_file_generator = StringToFileGenerator(file_name=full_json_file_name)
+        json_file_generator.generate_file(json_str)
     
     

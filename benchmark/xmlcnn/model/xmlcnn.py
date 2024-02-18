@@ -1,19 +1,18 @@
 
 from xmlcnn_impl import XMLCNN as XMLCNNImpl
-from fx_plus.helper import BaseTestCase
+from fx_plus.helper import BaseTestCase, UnitTestBase, emptyAttributeCls
 import argparse
 
 import json
 import torch
 
-class emptyAttributeCls:
-    pass
 
 class XMLCNN(XMLCNNImpl):
     """
     The XML-CNN comes from the paper Deep Learning for Extreme Multi-label Text
     Classification with dynamic pooling
-    """
+    """        
+        
     def __init__(self, config_json: str):
         # config_json: path to the json file containing the model configuration
         
@@ -29,7 +28,7 @@ class XMLCNN(XMLCNNImpl):
 
         self.batch_size = self._parse_batch_size(config_dict)
 
-
+        
     def get_sample_inputs(self):
         # generate the example inputs for profiling and verification
 
@@ -42,7 +41,7 @@ class XMLCNN(XMLCNNImpl):
             size=(self.batch_size, self.y_dim), dtype=torch.float, device="cuda", low=0, high=2
         )
         return e_emb, y
-
+        
     def _parse_config(self, config_dict: dict):
         # config_dict: the dictionary parsed from json file
         attr_cls = emptyAttributeCls()
@@ -104,7 +103,7 @@ class XMLCNN_Profile(BaseTestCase):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="XMLCNN End-to-End Training with CUDA Graph")
-    parser.add_argument('--json_path', '-f', type=str, required=True, help="Path to json file")
+    parser.add_argument('--json_path', '-f', type=str, required=False, help="Path to json file")
     args = parser.parse_args()
 
     ###########################################################################

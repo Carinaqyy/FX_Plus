@@ -7,3 +7,13 @@ Test1<Model> {
         }
     }
 }
+
+Test2<Model> {
+    inputs<list> {
+        input<tensor> {
+            distrib: randn;
+            size: (256, 64);
+            dtype: float;
+        }
+    }
+}

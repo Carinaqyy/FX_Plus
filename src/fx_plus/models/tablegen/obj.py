@@ -305,13 +305,7 @@ class tdModel(tdObj):
         """
         Generate the frontend class
         """
-        import_header = f"""
-import json
-import torch
-
-class emptyAttributeCls:
-    pass
-"""     
+             
         # Parse initiate arguments
         get_init_args = ""
         if hasattr(self, "init_args"):
@@ -376,9 +370,8 @@ class {self.name}({self.name}Impl):
         if hasattr(self, "runtime_args"):
             for arg in self.runtime_args.values():
                 frontend_cls += arg.create_json_parser()
-        print(import_header)
         print(frontend_cls)
-        return import_header + frontend_cls
+        return frontend_cls
         
     
     def create_json(self):
