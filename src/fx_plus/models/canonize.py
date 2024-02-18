@@ -29,6 +29,9 @@ def canonize_models():
         "-d", "--model_dir", type=str, required=True, 
         help="directory to the model implementation")
     
+    parser.add_argument(
+        "--unittest", action='store_true', 
+        help="specify unittest mode")
     args = parser.parse_args()
     
     # Verify the directory exists
@@ -61,11 +64,15 @@ def canonize_models():
     # Parse the td file
     td_file = os.path.join(args.model_dir, td_file)
     # Generate model file and json file
-    front_end_str, json_str, model_name = parse_td(td_file)
+    front_end_str, json_str, model_name, require_json = parse_td(td_file)
     
+    mode = "UnitTestBase" if args.unittest else "BaseTestCase"
+    json_prompt = ""
+    if require_json:
+        json_prompt = "args.json_path"
     # Add profiling and verification string
     profiling_str = f"""
-class {model_name}_Profile(BaseTestCase):
+class {model_name}_Profile({mode}):
     \"""
     Profile and verify the {model_name} model
     \"""
@@ -73,18 +80,18 @@ class {model_name}_Profile(BaseTestCase):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="XMLCNN End-to-End Training with CUDA Graph")
-    parser.add_argument('--json_path', '-f', type=str, required=True, help="Path to json file")
+    parser.add_argument('--json_path', '-f', type=str, required=False, help="Path to json file")
     args = parser.parse_args()
 
     ###########################################################################
-    profiler = {model_name}_Profile(args.json_path)
+    profiler = {model_name}_Profile({json_prompt})
     profiler(verify=True)
 """
 
     # Add extra header
     front_end_str = f"""
 from {impl_file[:-3]} import {model_name} as {model_name}Impl
-from fx_plus.helper import BaseTestCase
+from fx_plus.helper import BaseTestCase, UnitTestBase
 import argparse
 """ + front_end_str + profiling_str
 

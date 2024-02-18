@@ -25,7 +25,8 @@ def parse_td(td_file: str):
     front_end_str = parsed_result.create_frontend()
     json_str = parsed_result.create_json()
     model_name = parsed_result.get_model_name()
+    require_json = parsed_result.require_json
     print(front_end_str)
     print(json_str)
-    return front_end_str, json_str, model_name
+    return front_end_str, json_str, model_name, require_json
     

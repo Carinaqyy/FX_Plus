@@ -27,7 +27,7 @@ from torch.profiler import profile
 
 
 class BaseTestCase(unittest.TestCase):
-    def __init__(self, config_file: str, methodName: str = "runTest") -> None:
+    def __init__(self, config_file: str = None, methodName: str = "runTest") -> None:
         """
         Initiate the test case
         args:
@@ -86,7 +86,11 @@ class BaseTestCase(unittest.TestCase):
         return grad
     
     def get_reference_model(self, model):
-        reference = model.__class__(self.config)
+        # Handle no config file in unittest
+        if self.config == None:
+            reference = model.__class__()
+        else:
+            reference = model.__class__(self.config)
         model_state_dict = model.state_dict()
         reference.load_state_dict(model_state_dict)
         return reference
@@ -102,3 +106,46 @@ class BaseTestCase(unittest.TestCase):
             grad_target = self.grad_preprocess(param_target[1].grad)
             self.assertTrue(torch.allclose(grad_ref, grad_target))
 
+
+class UnitTestBase(BaseTestCase):
+    def __init__(
+        self, config_file: str = None, methodName: str = "runTest") -> None:
+        super().__init__(config_file, methodName)
+    
+    def __call__(self, verify, profiling=True, passes = []):
+        """
+        Launch the profiling and verification
+        # if Profile:
+        # model, input, optimizer => warmup, profile
+        # if verify
+        # model, ref_model, optimizer, input => compare
+        # return assertTrue
+        """
+        if self.config == None:
+            model = self.cls().to("cuda")
+        else:
+            model = self.cls(self.config).to("cuda")
+        sample_inputs = model.get_sample_inputs()
+        if not isinstance(sample_inputs, list):
+            sample_inputs = [sample_inputs, ]
+        if verify:
+            reference_model = self.get_reference_model(model).to("cuda")
+        
+        # Optimize
+        model = symbolic_trace(model)
+        ShapeProp(model).propagate(*sample_inputs)
+        for p in passes:
+            model = p(model)
+        
+        if verify:
+            output = model(*sample_inputs)
+            ref = reference_model(*sample_inputs)
+            # Call compare function
+            if not isinstance(output, list):
+                output = [output,]
+                ref = [ref,]
+            self.compare(output, ref)
+    
+    def compare(self, output, ref):
+        for o, r in zip(output, ref):
+            self.assertTrue(torch.allclose(o, r))

@@ -33,6 +33,7 @@ class tdObj:
         self.type = type
         self.children = {}
         self.attributes = {}
+        self.description = ""
         # Recursively parse the children context
         self._parse_str(context)
     
@@ -172,7 +173,15 @@ class tdTensor(tdObj):
         # Get the size of the tensor
         assert "size" in self.attributes
         self.size = self.attributes["size"].lstrip()
-        self.size = re.sub(r'\b(\w+)\b', r'self.\1', self.size)
+        # Handle if self.size is in integer / float form
+        def repl(match):
+            word = match.group(1)
+            if not (word.isdigit() or (word.replace('.', '', 1)).isdigit()):
+                return f'self.{word}'
+            else:
+                return word
+        self.size = re.sub(r'\b(\w+)\b', repl, self.size)
+        
         # Get the data type of the tensor
         assert "dtype" in self.attributes
         dtype = re.sub(
@@ -275,10 +284,12 @@ class tdModel(tdObj):
     def __init__(self, name: str, type: str, context: str) -> None:
         assert type == "Model"
         super().__init__(name, type, context)
+        self.require_json = True
         # Post processing of parsed result
         for k in ["init_args", "runtime_args", "inputs"]:
             if k not in self.children:
-                setattr(self, k, [])
+                continue
+
             assert self.children[k].type == "list"
             # Unroll the arg list
             setattr(
@@ -321,12 +332,17 @@ class emptyAttributeCls:
         if hasattr(self, "inputs"):
             for input in self.inputs.values():
                 input_tensors += input.create_tensor_constructor()
-                
-        frontend_cls = f"""
+        
+        class_description_str = f"""
 class {self.name}({self.name}Impl):
     \"\"\"
 {self.description}
-    \"\"\"
+    \"\"\"        
+        """ if self.description else f"""
+class {self.name}({self.name}Impl):
+    """
+        
+        init_func_str = f"""
     def __init__(self, config_json: str):
         # config_json: path to the json file containing the model configuration
         
@@ -339,12 +355,20 @@ class {self.name}({self.name}Impl):
         
         # Parse the runtime arguments
 {get_runtime_args}
-
+        """
+        
+        sample_inputs_str = f"""
     def get_sample_inputs(self):
         # generate the example inputs for profiling and verification
 {input_tensors}
         return {', '.join(self.inputs.keys())}
-""" 
+        """
+        
+        if not hasattr(self, "init_args") and not hasattr(self, "runtime_args"):
+            frontend_cls = class_description_str + sample_inputs_str
+            self.require_json = False
+        else:
+            frontend_cls = class_description_str + init_func_str + sample_inputs_str 
         
         if hasattr(self, "init_args"):
             for arg in self.init_args.values():
