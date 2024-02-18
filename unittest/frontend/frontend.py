@@ -50,7 +50,7 @@ if __name__ == '__main__':
     ###########################################################################
 
     profiler = Test1_Profile()
-    profiler(verify=True)
+    profiler(verify=True, visualize=True)
 
     profiler = Test2_Profile()
     profiler(verify=True)

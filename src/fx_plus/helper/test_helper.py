@@ -20,7 +20,7 @@ import logging
 from torch.fx import symbolic_trace
 from torch.fx.passes.shape_prop import ShapeProp
 from fx_plus import fxp_backend
-# from gtl.compiler.passes import pass_print_graph
+from fx_plus.compiler.passes import DrawGraphPass
 import re
 from torch.profiler import ProfilerActivity, record_function
 from torch.profiler import profile
@@ -112,7 +112,7 @@ class UnitTestBase(BaseTestCase):
         self, config_file: str = None, methodName: str = "runTest") -> None:
         super().__init__(config_file, methodName)
     
-    def __call__(self, verify, profiling=True, passes = []):
+    def __call__(self, verify, profiling=True, passes = [], visualize=False):
         """
         Launch the profiling and verification
         # if Profile:
@@ -134,9 +134,20 @@ class UnitTestBase(BaseTestCase):
         # Optimize
         model = symbolic_trace(model)
         ShapeProp(model).propagate(*sample_inputs)
+        
+        # Draw graph to visualize the model changes
+        if visualize:
+            draw_graph = DrawGraphPass("model_before_pass")
+            draw_graph(model)
+        
+        # Run the passes
         for p in passes:
             model = p(model)
         
+        if visualize:
+            draw_graph = DrawGraphPass("model_after_pass")
+            draw_graph(model)
+
         if verify:
             output = model(*sample_inputs)
             ref = reference_model(*sample_inputs)
