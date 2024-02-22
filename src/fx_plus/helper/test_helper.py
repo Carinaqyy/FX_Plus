@@ -107,12 +107,8 @@ class BaseTestCase(unittest.TestCase):
             self.assertTrue(torch.allclose(grad_ref, grad_target))
 
 
-class UnitTestBase(BaseTestCase):
-    def __init__(
-        self, config_file: str = None, methodName: str = "runTest") -> None:
-        super().__init__(config_file, methodName)
-    
-    def __call__(self, verify, profiling=True, passes = [], visualize=False):
+class UnitTestBase(BaseTestCase):   
+    def __call__(self, verify, profile=True, visualize=False, passes = []):
         """
         Launch the profiling and verification
         # if Profile:
@@ -126,8 +122,8 @@ class UnitTestBase(BaseTestCase):
         else:
             model = self.cls(self.config).to("cuda")
         sample_inputs = model.get_sample_inputs()
-        if not isinstance(sample_inputs, list):
-            sample_inputs = [sample_inputs, ]
+        if not isinstance(sample_inputs, tuple):
+            sample_inputs = (sample_inputs, )
         if verify:
             reference_model = self.get_reference_model(model).to("cuda")
         
@@ -137,15 +133,16 @@ class UnitTestBase(BaseTestCase):
         
         # Draw graph to visualize the model changes
         if visualize:
-            draw_graph = DrawGraphPass("model_before_pass")
+            draw_graph = DrawGraphPass(f"{self.cls.name}_before_pass")
             draw_graph(model)
         
         # Run the passes
+
         for p in passes:
-            model = p(model)
+            model = p(model).graph_module
         
         if visualize:
-            draw_graph = DrawGraphPass("model_after_pass")
+            draw_graph = DrawGraphPass(f"{self.cls.name}_after_pass")
             draw_graph(model)
 
         if verify:

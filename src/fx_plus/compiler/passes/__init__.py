@@ -14,3 +14,4 @@
 # limitations under the License.
 ################################################################################
 from fx_plus.compiler.passes.pass_graph_drawer import DrawGraphPass
+from fx_plus.compiler.passes.pass_frontend import FrontendPass

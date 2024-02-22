@@ -16,18 +16,49 @@
 from typing import Optional
 from torch.fx.graph_module import GraphModule
 from torch.fx.passes.infra.pass_base import PassBase, PassResult
+from torch.utils._python_dispatch import _pop_mode_temporarily, _len_torch_dispatch_stack
+from contextlib import nullcontext
+from torch.fx.passes.shape_prop import TensorMetadata
+from functools import reduce
 
 ###############################################################################
 # The frontend legalizes the graph module
 ###############################################################################
 import torch.fx as fx
 import torch
+import re
 
+
+class CanonizeRule:
+    def __init__(self, pattern, namespace, new_op_format="{}") -> None:
+        """
+        """
+        self.pattern = re.compile(pattern)
+        self.namespace = namespace
+        self.new_op_format = new_op_format
+    
+    def get_canonize_target(self, target_name: str):
+        match = re.search(self.pattern, target_name)
+        if not match: return
+        op = match.groupdict()["op"]
+        canonized_target = getattr(
+            self.namespace, self.new_op_format.format(op))
+        assert callable(canonized_target), \
+            f"{canonized_target} is not callable"
+        return canonized_target   
+        
 
 class FrontendPass(PassBase):
     transparent_nodes = [
         torch.ops.aten.detach,
         torch.ops.aten.expand
+    ]
+    
+    canonize_rules = [
+        CanonizeRule(
+            pattern=r'aten.(?P<op>[a-zA-Z_]\w*).(default|Scalar|Tensor|dim_IntList|int|dim)',
+            namespace=torch.ops.aten
+        )
     ]
     def call(self, graph_module: GraphModule) -> PassResult | None:
         self.modified = False
@@ -35,9 +66,26 @@ class FrontendPass(PassBase):
         graph = graph_module.graph
         for node in graph.nodes:
             self.visit(node)
-            
-            
-        return super().call(graph_module)
+        
+        graph = graph_module.graph
+        eliminate_imme_value(graph_module, graph)
+        
+        # Clean up -1 in view
+        for node in graph.nodes:
+            if node.target == torch.ops.aten.view:
+                new_shape = node.args[1]
+                if -1 in new_shape:
+                    node_shape = node.meta['tensor_meta'].shape
+                    numel = reduce(lambda x, y: x * y, node_shape, 1)
+                    for d in new_shape:
+                        if d != -1:
+                            numel /= d
+                        canonical_shape = [d if d != -1 else int(numel) for d in new_shape]
+                        node.args = (node.args[0], canonical_shape)
+        
+        graph.eliminate_dead_code()
+
+        return PassResult(graph_module, self.modified)
     
     def visit(self, node: fx.Node) -> None:
         # Remove transparent nodes
@@ -45,10 +93,69 @@ class FrontendPass(PassBase):
             node.replace_all_uses_with(node.args[0])
             return
         
-        # Eliminate suffix of aten ops
-        target_name = str(node.target).split(sep='.')
-        if target_name[0] != "aten": return
+        # Apply registered canonize rules
+        self.apply_canonize_rules(node)
+    
+    def apply_canonize_rules(self, node: fx.Node) -> None:
+        """
+        Sequentially apply the canonize rules registed
+        """
+        if node.op != "call_function":
+            return
+        # Get target function
+        target_name = str(node.target)
         
+        for rule in self.canonize_rules:
+            canonized_target = rule.get_canonize_target(target_name)
+            if canonized_target is not None:
+                node.target = canonized_target
+                break        
         
-        
-        
+    # 1. Eliminate suffix - using regexpression rule for elimination 
+    # 2. Eliminate _
+    # 3. Eliminate imme number, convert const to const_tensor
+    # 4. View - calculate -1 in shapes
+    
+def eliminate_imme_value(module, graph):
+    """
+    Insert constant as attribute tensors
+    """
+    name_idx = 0
+    for node in graph.nodes:
+        if node.target in [torch.ops.aten.mul, torch.ops.aten.add]:
+            if len(node.all_input_nodes) == 1:
+                input_node = node.all_input_nodes[0]
+                # Get the constant value
+                constant_value = None
+                constant_idx = None
+                for idx, arg in enumerate(node.args):
+                    if arg != input_node:
+                        constant_value = arg
+                        constant_idx = idx
+                # eliminate fake tensor
+                with (_pop_mode_temporarily() if _len_torch_dispatch_stack() > 0 else nullcontext()):
+                    constant_node = inject_get_attr(
+                        input_node, module, graph,
+                        torch.Tensor([constant_value,]).to(torch.float16),
+                        "const_scalar%d" % name_idx
+                    )
+                name_idx += 1
+                graph.inserting_after(constant_node)
+                scalar_node = graph.call_function(node.target, args=(input_node, constant_node))
+                scalar_node.meta = {}
+                scalar_node.meta['tensor_meta'] = node.meta['tensor_meta']._replace()
+                node.replace_all_uses_with(scalar_node)
+
+def inject_get_attr(inject_point, module, graph, tensor, tensor_name):
+    # update injection point to maintain topological order
+    graph.inserting_after(inject_point)
+    # register the tensor in the module
+    module.register_buffer(tensor_name, tensor)
+    # create get attribute node
+    attr_node = graph.get_attr(tensor_name)
+    attr_node.meta = {}
+    attr_node.meta['tensor_meta'] = TensorMetadata(
+                shape=tensor.shape, dtype=tensor.dtype, requires_grad=False, 
+                stride=(1,), memory_format=torch.contiguous_format, 
+                is_quantized=False, qparams={})
+    return attr_node

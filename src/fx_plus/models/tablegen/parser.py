@@ -15,34 +15,74 @@
 ###############################################################################
 from fx_plus.models.tablegen.obj import tdObj
 
+def parse_passes(obj):
+    assert obj.name == "Passes" and obj.type == "list"
+    header = ""
+    instances = """
+    passes = []    
+"""
+    for p in obj.children.values():
+        header += p.get_header()
+        instances += p.get_instance()
+    
+    return header, instances
+        
+
 def parse_td(td_file: str):
     """
-    Parse the definition file
+    Parse the definition file. The definition constains
+    (optional) a list of passes to be tested
+    models
     """
     with open(td_file, "r") as td:
         str_td = td.read()
     
-    front_end_str = ""
-    json_str = ""
-    model_name = []
-    require_json = False
+    # Step 1: parse all the objects
     objects = iter(tdObj("_", "_", str_td).children.values())
+    
+    # The returning strings
+    models = {}
+    passes = {}
     for obj in objects:
-        parsed_result = obj
-        front_end_str += parsed_result.create_frontend()
-        json_str += parsed_result.create_json()
-        model_name.append(parsed_result.get_model_name())
-        require_json = require_json or parsed_result.require_json
+        if obj.name == "Passes" and obj.type == "list":
+            for p in obj.children.values():
+                passes[p.name] = p.src
+        elif obj.type == "Model":
+            name = obj.get_model_name()
+            frontend = obj.create_frontend()
+            json_str = obj.create_json()
+            
+            models[name] = (frontend, json_str)
     
-    import_header = f"""
-import json
-import torch
+    return models, passes
+#     header_str = ""
+#     model_def_str = ""
+    
+    
+#     front_end_str = ""
+#     json_str = ""
+#     model_name = []
+#     require_json = False
+    
 
-"""
-    front_end_str = import_header + front_end_str
-    print(front_end_str)
-    print(json_str)
-    print(model_name)
-    print(require_json)
-    return front_end_str, json_str, model_name, require_json
+#     breakpoint()
+#     for obj in objects:
+#         if obj.name == "Passes" and obj.type == "list":
+#             pass_header, pass_instances = parse_passes(obj)
+#         parsed_result = obj
+#         front_end_str += parsed_result.create_frontend()
+#         json_str += parsed_result.create_json()
+#         model_name.append(parsed_result.get_model_name())
+#         require_json = require_json or parsed_result.require_json
     
+#     import_header = f"""
+# import json
+# import torch
+# {pass_header}
+# """
+#     front_end_str = import_header + front_end_str
+#     print(front_end_str)
+#     print(json_str)
+#     print(model_name)
+#     print(require_json)
+#     return front_end_str, json_str, model_name, require_json

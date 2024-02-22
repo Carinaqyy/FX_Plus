@@ -31,9 +31,12 @@ def canonize_models():
     
     # Indicate unittest mode / training mode
     parser.add_argument(
-        "--unittest", action='store_true', 
+        "-u", "--unittest", action='store_true', 
         help="specify unittest mode")
     args = parser.parse_args()
+    
+    # Get mode
+    mode = "UnitTestBase" if args.unittest else "BaseTestCase"
     
     # Verify the directory exists
     if not os.path.exists(args.model_dir):
@@ -65,77 +68,109 @@ def canonize_models():
     # Parse the td file
     td_file = os.path.join(args.model_dir, td_file)
     # Generate model file and json file
-    front_end_str, json_str, model_name, require_json = parse_td(td_file)
+    models, passes = parse_td(td_file)
     
-    mode = "UnitTestBase" if args.unittest else "BaseTestCase"
-    json_prompt = ""
-    if require_json:
-        json_prompt = "args.json_path"
-    # Add profiling and verification string
-    profiling_str1 = f"""
-class {model_name}_Profile({mode}):
-    \"""
-    Profile and verify the {model_name} model
-    \"""
-    cls = {model_name}
+    # Step 1: get headers
+    header_str = f"""
+import os
+import json
+import torch
+from fx_plus.helper import {mode}, emptyAttributeCls
+import argparse
 """
+    # 1.1 import model implementations
+    for model in models.keys():
+        header_str += f"from {impl_file[:-3]} import {model} as {model}Impl\n"
+    
+    # 1.2 import pass implementations
+    for p in passes.keys():
+        header_str += f"from {passes[p]} import {p}"
+    
+    # Step 2: get model definitions
+    model_def_str = ""
+    json_file_str = ""
+    for model in models.keys():
+        model_def, json_str = models[model]
+        if json_str is not None:
+            json_file_str += json_str
+        model_def_str += f"""{model_def}
 
-    profiling_str2 = f"""
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description="XMLCNN End-to-End Training with CUDA Graph")
-    parser.add_argument('--json_path', '-f', type=str, required=False, help="Path to json file")
-    args = parser.parse_args()
-
-    ###########################################################################
-"""
-
-    profiling_str3 = f"""
-    profiler = {model_name}_Profile({json_prompt})
-    profiler(verify=True)
-"""
-
-    profiling_str = ""
-    for model in model_name:
-        profiling_str += f"""
-class {model}_Profile({mode}):
+class {model}TB({mode}):
     \"""
-    Profile and verify the {model} model
+    Testbed of the {model} model
     \"""
     cls = {model}
 """
-    profiling_str += profiling_str2
-    for model in model_name:
-        profiling_str += f"""
-    profiler = {model}_Profile({json_prompt})
-    profiler(verify=True)
-"""
-    print("Profiling_str")
-    print(profiling_str)
 
-    # Add extra header
+    # Step 3: get passes
+    passes_args = ""
+    if len(passes) > 0:
+        passes_args = ",\n        passes=passes"
+        pass_instance = "passes = []\n"
+        for p in passes.keys():
+            pass_instance += f"    passes.append({p}())\n"
+    else:
+        pass_instance = ""
     
-    # Add model name
-    import_model_str = ""
-    for model in model_name:
-        import_model_str += f"""
-from {impl_file[:-3]} import {model} as {model}Impl"""
-    # Add helper header
-    front_end_str = import_model_str + f"""
-from fx_plus.helper import BaseTestCase, UnitTestBase, emptyAttributeCls
-import argparse
-""" + front_end_str + profiling_str
+    # Step 4: launch the tests
+    launch_str = ""
+    for model in models.keys():
+        if models[model][1] is None:
+            json_arg = ""
+        else:
+            json_arg = "args.json_path"
+        launch_str += f"""
+    {model}TB({json_arg})(
+        verify=args.verify, 
+        profile=args.profile, 
+        visualize=args.visualize{passes_args})
+"""
+    
+    # Add json file
+    json_file_name = impl_file[:-8].lower() + ".json"
+    full_json_file_name = os.path.join(args.model_dir, json_file_name)
+    json_file_generator = StringToFileGenerator(file_name=full_json_file_name)
+    json_file_generator.generate_file(json_file_str)
+    
+    # Add the test file
+
+    frontend_str = f"""# Automatically generated file. Do not modify!
+{header_str}
+
+# Model frontends and testbenchs
+{model_def_str}
+
+if __name__ == '__main__':
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    default_json_file = os.path.join(script_dir, "{json_file_name}")
+    parser = argparse.ArgumentParser(
+        description="XMLCNN End-to-End Training with CUDA Graph")
+    parser.add_argument(
+        '--json_path', '-f', type=str, default=default_json_file, 
+        help="Path to json file")
+    parser.add_argument(
+        '--verify', '-v', action='store_true', 
+        help="verify the results against the reference")
+    parser.add_argument(
+        '--profile', '-p', action='store_true',
+        help="profile the models"
+    )
+    parser.add_argument(
+        '--visualize', '-s', action='store_true',
+        help="visualize the dataflow graph before and after the transformation"
+    )
+    args = parser.parse_args()
+    
+    {pass_instance}
+    {launch_str}
+"""
 
     # Add model frontend file (containing profiling and verification)
     model_file_name = impl_file[:-8].lower() + ".py"
     full_model_file_name = os.path.join(args.model_dir, model_file_name)
     frontend_file_generator = StringToFileGenerator(file_name=full_model_file_name)
-    frontend_file_generator.generate_file(front_end_str)
+    frontend_file_generator.generate_file(frontend_str)
 
-    # Add json file
-    if require_json:
-        json_file_name = impl_file[:-5].lower() + ".py"
-        full_json_file_name = os.path.join(args.model_dir, json_file_name)
-        json_file_generator = StringToFileGenerator(file_name=full_json_file_name)
-        json_file_generator.generate_file(json_str)
+    
     
     

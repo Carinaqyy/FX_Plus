@@ -70,6 +70,8 @@ class tdObj:
                 obj = tdScalar(name, type, context)
             elif type == "tensor":
                 obj = tdTensor(name, type, context)
+            elif type == "pass":
+                obj = tdPass(name, type, context)
             else:
                 obj = tdObj(name, type, context)
             self.children[name] = obj
@@ -192,7 +194,7 @@ class tdTensor(tdObj):
             lines = [
                 self.description[i:i+75].lstrip() 
                 for i in range(0, len(self.description), 75)]
-            self.description = '\n        #'.join(lines)
+            self.description = "        #" + '\n        #'.join(lines)
     
     def create_tensor_constructor(self):
         if not hasattr(self, f"get_{self.distrib}_tensor"):
@@ -206,8 +208,7 @@ class tdTensor(tdObj):
         distribution
         """
         kwargs = f"size={self.size}, dtype={self.dtype}, device=\"cuda\""
-        construct_str = f"""
-        # {self.description}
+        construct_str = f"""{self.description}
         {self.name} = torch.randn(
             {kwargs}
         )"""
@@ -334,6 +335,7 @@ class {self.name}({self.name}Impl):
     \"\"\"        
         """ if self.description else f"""
 class {self.name}({self.name}Impl):
+    name = "{self.name}"
     """
         
         init_func_str = f"""
@@ -378,7 +380,12 @@ class {self.name}({self.name}Impl):
         """
         Create a json file example that can be filled by the user
         """
-        get_json = "{\n"
+        if not hasattr(self, "init_args") and not hasattr(self, "runtime_args"):
+            return None
+        
+        get_json = f"""{{
+    "name": "{self.name}",
+"""
         if hasattr(self, "init_args"):
             for arg in self.init_args.values():
                 get_json += arg.get_json()
@@ -387,8 +394,7 @@ class {self.name}({self.name}Impl):
         if hasattr(self, "runtime_args"):
             for arg in self.runtime_args.values():
                 get_json += arg.get_json()
-        get_json += "}"
-        print(get_json)
+        get_json += "}\n"
         return get_json
     
     def get_model_name(self):
@@ -396,3 +402,21 @@ class {self.name}({self.name}Impl):
         Return the model name defined in .td file
         """
         return self.name
+
+###############################################################################
+# Derived object with pass type
+############################################################################### 
+class tdPass(tdObj):
+    def __init__(self, name: str, type: str, context: str) -> None:
+        assert type == "pass"
+        super().__init__(name, type, context)
+        if "src" not in self.attributes.keys():
+            self.src = "fx_plus.compiler.passes"
+        else:
+            self.src = self.attributes["src"]
+        
+        # Canonize the src
+        self.src = re.sub(r'\s+', '', self.src)
+    
+    def create_pass_instance(self):
+        return f"from {self.src} import {self.name}"
