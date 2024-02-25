@@ -84,7 +84,7 @@ import argparse
     
     # 1.2 import pass implementations
     for p in passes.keys():
-        header_str += f"from {passes[p]} import {p}"
+        header_str += f"from {passes[p]} import {p}\n"
     
     # Step 2: get model definitions
     model_def_str = ""

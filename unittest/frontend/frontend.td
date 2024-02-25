@@ -1,6 +1,9 @@
 Passes<list> {
     FrontendPass<pass> {
         src: fx_plus.compiler.passes;
+    },
+    LocalCSE<pass> {
+        src: fx_plus.compiler.passes;
     }
 }
 
@@ -34,6 +37,21 @@ Test3<Model> {
         x<tensor> {
             distrib: randn;
             size: (16, 64);
+            dtype: float;
+        }
+    }
+}
+
+Test4<Model> {
+    inputs<list> {
+        x<tensor> {
+            distrib: randn;
+            size: (256, 64);
+            dtype: float;
+        },
+        y<tensor> {
+            distrib: randn;
+            size: (256, 64);
             dtype: float;
         }
     }

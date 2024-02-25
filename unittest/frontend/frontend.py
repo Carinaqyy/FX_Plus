@@ -8,7 +8,10 @@ import argparse
 from frontend_impl import Test1 as Test1Impl
 from frontend_impl import Test2 as Test2Impl
 from frontend_impl import Test3 as Test3Impl
+from frontend_impl import Test4 as Test4Impl
 from fx_plus.compiler.passes import FrontendPass
+from fx_plus.compiler.passes import LocalCSE
+
 
 # Model frontends and testbenchs
 
@@ -69,6 +72,27 @@ class Test3TB(UnitTestBase):
     """
     cls = Test3
 
+class Test4(Test4Impl):
+    name = "Test4"
+    
+    def get_sample_inputs(self):
+        # generate the example inputs for profiling and verification
+
+        x = torch.randn(
+            size=(256, 64), dtype=torch.float, device="cuda"
+        )
+        y = torch.randn(
+            size=(256, 64), dtype=torch.float, device="cuda"
+        )
+        return x, y
+        
+
+class Test4TB(UnitTestBase):
+    """
+    Testbed of the Test4 model
+    """
+    cls = Test4
+
 
 if __name__ == '__main__':
     script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -93,6 +117,7 @@ if __name__ == '__main__':
     
     passes = []
     passes.append(FrontendPass())
+    passes.append(LocalCSE())
 
     
     Test1TB()(
@@ -108,6 +133,12 @@ if __name__ == '__main__':
         passes=passes)
 
     Test3TB()(
+        verify=args.verify, 
+        profile=args.profile, 
+        visualize=args.visualize,
+        passes=passes)
+
+    Test4TB()(
         verify=args.verify, 
         profile=args.profile, 
         visualize=args.visualize,

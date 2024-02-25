@@ -28,7 +28,10 @@ import torch.fx as fx
 import torch
 import re
 
-
+# 1. Eliminate suffix - using regexpression rule for elimination 
+# 2. Eliminate _
+# 3. Eliminate imme number, convert const to const_tensor
+# 4. View - calculate -1 in shapes
 class CanonizeRule:
     def __init__(self, pattern, namespace, new_op_format="{}") -> None:
         """
@@ -109,12 +112,7 @@ class FrontendPass(PassBase):
             canonized_target = rule.get_canonize_target(target_name)
             if canonized_target is not None:
                 node.target = canonized_target
-                break        
-        
-    # 1. Eliminate suffix - using regexpression rule for elimination 
-    # 2. Eliminate _
-    # 3. Eliminate imme number, convert const to const_tensor
-    # 4. View - calculate -1 in shapes
+                break
     
 def eliminate_imme_value(module, graph):
     """
@@ -145,6 +143,8 @@ def eliminate_imme_value(module, graph):
                 scalar_node.meta = {}
                 scalar_node.meta['tensor_meta'] = node.meta['tensor_meta']._replace()
                 node.replace_all_uses_with(scalar_node)
+        #TODO: other ops
+        
 
 def inject_get_attr(inject_point, module, graph, tensor, tensor_name):
     # update injection point to maintain topological order

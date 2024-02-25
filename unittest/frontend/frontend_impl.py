@@ -15,3 +15,10 @@ class Test3(torch.nn.Module):
     def forward(self, x):
         y = torch.ops.aten.view(x, [256, -1])
         return y
+    
+class Test4(torch.nn.Module):
+    def forward(self, x, y):
+        m = torch.ops.aten.add.Tensor(x, y)
+        n = torch.ops.aten.add.Tensor(x, y)
+        c = torch.ops.aten.add(m, 1)
+        return torch.ops.aten.add(c, n)

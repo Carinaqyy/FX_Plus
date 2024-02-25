@@ -15,3 +15,6 @@
 ################################################################################
 from fx_plus.compiler.passes.pass_graph_drawer import DrawGraphPass
 from fx_plus.compiler.passes.pass_frontend import FrontendPass
+from fx_plus.compiler.passes.pass_cse import LocalCSE
+from fx_plus.compiler.passes.pass_decomposition import DecompositionPass
+from fx_plus.compiler.passes.pass_fake_shape_infer import FakeTensorInfer
