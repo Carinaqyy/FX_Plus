@@ -1,9 +1,0 @@
-{
-    "sequence_length": 512,
-    "embedding_dim": 304,
-    "filter_sizes": [2, 4, 8],
-    "num_filters": 32,
-    "hidden_dims": 512,
-    "y_dim": 670208,
-    "batch_size": 2
-}

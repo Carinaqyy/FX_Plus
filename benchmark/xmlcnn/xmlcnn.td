@@ -1,3 +1,24 @@
+Passes<list> {
+    LossEliminate<pass> {
+        src: fx_plus.compiler.passes;
+    }
+    FrontendPass<pass> {
+        src: fx_plus.compiler.passes;
+    },
+    DecompositionPass<pass> {
+        src: fx_plus.compiler.passes;
+    },
+    LocalCSE<pass> {
+        src: fx_plus.compiler.passes
+    },
+    Reassociation<pass> {
+        src: fx_plus.compiler.passes;
+    },
+    TritonFusionPass<pass> {
+        src: fx_plus.compiler.passes;
+    }
+}
+
 XMLCNN<Model> {
     init_args<list> {
         config<attr_cls> {
@@ -25,7 +46,7 @@ XMLCNN<Model> {
         e_emb<tensor> {
             distrib: randn;
             size: (batch_size, sequence_length, embedding_dim);
-            dtype: float;
+            dtype: float16;
             description: input embedding;
         }
         
@@ -34,10 +55,12 @@ XMLCNN<Model> {
             low: 0;
             high: 2;
             size: (batch_size, y_dim);
-            dtype: float;
+            dtype: float16;
             description: binary labels;
         }
     }
+
+    dtype: float16;
 
     description: the XML-CNN comes from the paper Deep Learning for Extreme 
         Multi-label Text Classification with dynamic pooling;
