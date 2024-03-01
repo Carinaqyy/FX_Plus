@@ -13,10 +13,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 ###############################################################################
-from torch._dynamo.backends.common import aot_autograd
-from fx_plus.compiler.backend import partition_fn, default_compiler
-
-fxp_backend = aot_autograd(
-    fw_compiler=default_compiler, 
-    bw_compiler=default_compiler,
-    partition_fn=partition_fn)
+from fx_plus.compiler.backend import FxpBackend

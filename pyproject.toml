@@ -19,6 +19,7 @@ classifiers = [
 
 [project.scripts]
 canonize_models = "fx_plus:canonize_models"
+triton_codegen = "fx_plus:triton_codegen"
 
 [project.urls]
 Homepage = "https://github.com/Carinaqyy/FX_Plus"

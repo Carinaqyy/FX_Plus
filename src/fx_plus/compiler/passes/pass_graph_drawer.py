@@ -42,7 +42,6 @@ class DrawGraphPass(PassBase):
             graph = g.get_dot_graph()
             graph.set("nslimit", 2)
             f.write(graph.create_svg())
-        
-        
-        
+
+        return PassResult(graph_module, False)
         

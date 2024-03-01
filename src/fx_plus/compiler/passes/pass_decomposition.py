@@ -18,15 +18,10 @@ from torch.fx.passes.infra.pass_base import PassBase, PassResult
 from torch.fx.graph_module import GraphModule
 from torch.fx import Node
 from torch.fx.subgraph_rewriter import replace_pattern_with_filters
-from torch._subclasses.fake_tensor import FakeTensorMode, FakeTensor
 from typing import Optional
-from torch.fx.passes.shape_prop import _extract_tensor_metadata
 from torch.fx.experimental.proxy_tensor import py_sym_types
-from torch.fx.node import map_aggregate
 from torch.fx.passes.tools_common import legalize_graph
-from torch.fx.passes.fake_tensor_prop import FakeTensorProp
 from fx_plus.compiler.passes.pass_fake_shape_infer import FakeTensorInfer
-import operator
 
 ################################################################################
 # Graph-level pass to provide an interface for registering pattern and 

@@ -1,5 +1,5 @@
 ###############################################################################
-# Copyright [Carina Quan]
+# Copyright [Carina Quan] [name of copyright owner]
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,10 +13,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 ###############################################################################
-from torch.fx.passes.pass_manager import PassManager as PassManagerBase
-
-
-class PassManager(PassManagerBase):
-    def __init__(self, *args, **kwargs):
-        super(PassManager, self).__init__(*args, **kwargs)
-    
+from fx_plus.compiler.utils.get_attr import inject_get_attr

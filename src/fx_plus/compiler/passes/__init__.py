@@ -18,3 +18,6 @@ from fx_plus.compiler.passes.pass_frontend import FrontendPass
 from fx_plus.compiler.passes.pass_cse import LocalCSE
 from fx_plus.compiler.passes.pass_decomposition import DecompositionPass
 from fx_plus.compiler.passes.pass_fake_shape_infer import FakeTensorInfer
+from fx_plus.compiler.passes.pass_constant_propagation import Reassociation
+from fx_plus.compiler.passes.pass_eliminate_loss import LossEliminate
+from fx_plus.compiler.passes.pass_triton_fusion import TritonFusionPass

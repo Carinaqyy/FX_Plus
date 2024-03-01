@@ -133,9 +133,9 @@ def eliminate_imme_value(module, graph):
                 # eliminate fake tensor
                 with (_pop_mode_temporarily() if _len_torch_dispatch_stack() > 0 else nullcontext()):
                     constant_node = inject_get_attr(
-                        input_node, module, graph,
-                        torch.Tensor([constant_value,]).to(torch.float16),
-                        "const_scalar%d" % name_idx
+                        input_node, module, 
+                        "const_scalar%d" % name_idx,
+                        torch.Tensor([constant_value,]).to("cuda").to(torch.float16)
                     )
                 name_idx += 1
                 graph.inserting_after(constant_node)
@@ -144,18 +144,3 @@ def eliminate_imme_value(module, graph):
                 scalar_node.meta['tensor_meta'] = node.meta['tensor_meta']._replace()
                 node.replace_all_uses_with(scalar_node)
         #TODO: other ops
-        
-
-def inject_get_attr(inject_point, module, graph, tensor, tensor_name):
-    # update injection point to maintain topological order
-    graph.inserting_after(inject_point)
-    # register the tensor in the module
-    module.register_buffer(tensor_name, tensor)
-    # create get attribute node
-    attr_node = graph.get_attr(tensor_name)
-    attr_node.meta = {}
-    attr_node.meta['tensor_meta'] = TensorMetadata(
-                shape=tensor.shape, dtype=tensor.dtype, requires_grad=False, 
-                stride=(1,), memory_format=torch.contiguous_format, 
-                is_quantized=False, qparams={})
-    return attr_node

@@ -14,4 +14,5 @@
 # limitations under the License.
 ###############################################################################
 from fx_plus.models import canonize_models
-from fx_plus.compiler import fxp_backend
+from fx_plus.triton_codegen import triton_codegen
+from fx_plus.compiler import FxpBackend

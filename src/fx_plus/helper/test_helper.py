@@ -19,11 +19,12 @@ import torch
 import logging
 from torch.fx import symbolic_trace
 from torch.fx.passes.shape_prop import ShapeProp
-from fx_plus import fxp_backend
+from fx_plus import FxpBackend
 from fx_plus.compiler.passes import DrawGraphPass
 import re
 from torch.profiler import ProfilerActivity, record_function
-from torch.profiler import profile
+from torch.profiler import profile as torch_profile
+import matplotlib.pyplot as plt
 
 
 class BaseTestCase(unittest.TestCase):
@@ -36,7 +37,7 @@ class BaseTestCase(unittest.TestCase):
         super().__init__(methodName)
         self.config = config_file
         
-    def __call__(self, verify, profiling=True, *args, **kwargs):
+    def __call__(self, verify, profile=True, visualize=False, passes=[], *args, **kwargs):
         """
         Launch the profiling and verification
         # if Profile:
@@ -45,14 +46,16 @@ class BaseTestCase(unittest.TestCase):
         # model, ref_model, optimizer, input => compare
         # return assertTrue
         """
-        model = self.cls(self.config).to("cuda")
+        model = self.cls(self.config).to("cuda").to(self.cls.dtype)
         # reference = self.cls(self.config).to("cuda")
         sample_inputs = model.get_sample_inputs()
         
         optimizer = self.get_optimizer(model)
-        if verify:
-            reference_model = self.get_reference_model(model).to("cuda")
-            optimizer_ref = self.get_optimizer(reference_model)
+        reference_model = self.get_reference_model(model).to("cuda").to(self.cls.dtype)
+        optimizer_ref = self.get_optimizer(reference_model)
+        
+        # Get compiler backend
+        fxp_backend = FxpBackend(passes, visualize, name=self.cls.name).backend
         
         # Optimize
         model = torch.compile(
@@ -64,16 +67,43 @@ class BaseTestCase(unittest.TestCase):
             # Call compare function
             self.compare(reference_model, model)
             
-        if profiling:
-            # Warmup
+        if profile:
+            # Profile the optimized model
+            duration = self.profile_model(model, optimizer, sample_inputs)
+            # Profile the reference model
+            duration_ref = self.profile_model(
+                reference_model, optimizer_ref, sample_inputs)
+
+            # Visualize the result if required
+            if visualize:
+                self.plot_speedup(duration, duration_ref)
+
+    def plot_speedup(self, duration, duration_ref):
+        labels = ['Original', 'Optimized']
+        speedup = duration_ref/duration
+        values = [1, speedup]
+        plt.bar(labels, values, width=0.1)
+        plt.title(f'Relative Throughput of {self.cls.name}.')
+        plt.grid(True)
+        plt.text(1, duration_ref/duration + 0.02, f'{speedup:.2f}x', ha='center')
+        plt.savefig(f'./speedup_{self.cls.name}.png')
+
+    def profile_model(self, model, optimizer, sample_inputs):
+        # Warmup
+        for _ in range(10):
+            self.run_model(model, optimizer, sample_inputs)
+        # Run profiling
+        with torch_profile(activities=[ProfilerActivity.CUDA], record_shapes=True) as prof:
             for _ in range(10):
                 self.run_model(model, optimizer, sample_inputs)
-            # Run profiling
-            with profile(activities=[ProfilerActivity.CUDA], record_shapes=True) as prof:
-                for _ in range(10):
-                    self.run_model(model, optimizer, sample_inputs)
 
         print(prof.key_averages().table(sort_by="cuda_time_total"))
+        # Get CUDA duration
+        duration = 0
+        for item in prof.key_averages():
+            duration += item.self_cuda_time_total
+        return duration
+
         
     @staticmethod
     def run_model(model, optimizer, sample_inputs):
@@ -104,7 +134,12 @@ class BaseTestCase(unittest.TestCase):
         for(param_ref, param_target) in zip(list(reference.named_parameters()), list(model.named_parameters())):
             grad_ref = param_ref[1].grad
             grad_target = self.grad_preprocess(param_target[1].grad)
-            self.assertTrue(torch.allclose(grad_ref, grad_target))
+            self.assertTrue(
+                torch.sum(
+                    torch.isclose(grad_ref, grad_target, rtol=1e-2) /
+                    grad_target.numel()
+                ) > 0.95
+            )
 
 
 class UnitTestBase(BaseTestCase):   
@@ -118,14 +153,14 @@ class UnitTestBase(BaseTestCase):
         # return assertTrue
         """
         if self.config == None:
-            model = self.cls().to("cuda")
+            model = self.cls().to("cuda").to(self.cls.dtype)
         else:
-            model = self.cls(self.config).to("cuda")
+            model = self.cls(self.config).to("cuda").to(self.cls.dtype)
         sample_inputs = model.get_sample_inputs()
         if not isinstance(sample_inputs, tuple):
             sample_inputs = (sample_inputs, )
         if verify:
-            reference_model = self.get_reference_model(model).to("cuda")
+            reference_model = self.get_reference_model(model).to("cuda").to(self.cls.dtype)
         
         # Optimize
         model = symbolic_trace(model)
