@@ -16,19 +16,27 @@
 import torch
 from torch.fx.passes.infra.pass_base import PassBase, PassResult
 from torch.fx.graph_module import GraphModule
-from torch.fx import Node
 from torch.fx.subgraph_rewriter import replace_pattern_with_filters
-from typing import Optional
-from torch.fx.experimental.proxy_tensor import py_sym_types
 from torch.fx.passes.tools_common import legalize_graph
-from fx_plus.compiler.passes.pass_fake_shape_infer import FakeTensorInfer
 
-################################################################################
-# Graph-level pass to provide an interface for registering pattern and 
-# replacement and rewrite the graph
-################################################################################
+# Registered triton ops
+from fx_plus.compiler.passes.triton_ops import triton_addmm as triton_addmm_base
+from fx_plus.compiler.passes.triton_ops import triton_xmlcnn_loss as triton_xmlcnn_loss_base
+from fx_plus.compiler.passes.triton_ops import triton_mm_dp_relu_bp as triton_mm_dp_relu_bp_base
 
-class DecomposeBase:
+@torch.fx.wrap
+def triton_addmm(*args, **kwargs):
+    return triton_addmm_base(*args, **kwargs)
+
+@torch.fx.wrap
+def triton_xmlcnn_loss(*args, **kwargs):
+    return triton_xmlcnn_loss_base(*args, **kwargs)
+
+@torch.fx.wrap
+def triton_mm_dp_relu_bp(*args, **kwargs):
+    return triton_mm_dp_relu_bp_base(*args, **kwargs)
+
+class FusionPatternBase:
     @staticmethod
     def pattern(*args, **kwargs):
         raise NotImplementedError
@@ -40,54 +48,64 @@ class DecomposeBase:
     @staticmethod
     def filter(match, original_graph, pattern_graph):
         return True
+    
 
-class DecomposeAddmm(DecomposeBase):
+class MMAddReLU(FusionPatternBase):
     @staticmethod
-    def pattern(bias, lhs, rhs):
-        return torch.ops.aten.addmm(bias, lhs, rhs)
+    def pattern(a, b, c):
+        mm = torch.ops.aten.mm(a, b)
+        add = torch.ops.aten.add(mm, c)
+        relu = torch.ops.aten.relu(add)
+        return relu
     
     @staticmethod
-    def replacement(bias, lhs, rhs):
-        mm = torch.ops.aten.mm(lhs, rhs)
-        return torch.ops.aten.add(mm, bias)
+    def replacement(a, b, c):
+        return triton_addmm(a, b, c, activation="relu")
 
-class DecomposeDropoutBackward(DecomposeBase):
+
+class XMLCNNLoss(FusionPatternBase):
     @staticmethod
-    def pattern(grad_y, mask, scale):
-        return torch.ops.aten.native_dropout_backward(grad_y, mask, scale)
+    def pattern(a, b, c, d, e):
+        # (sigmoid(a @ b + c) - d) * (e * 0.0078125)
+        mm = torch.ops.aten.mm(a, b)
+        add_1 = torch.ops.aten.add(mm, c)
+        sigmoid = torch.ops.aten.sigmoid(add_1)
+        mul1 = torch.ops.aten.mul(d, -1)
+        add_2 = torch.ops.aten.add(sigmoid, mul1)
+        mul_2 = torch.ops.aten.mul(e, 0.0078125)
+        mul = torch.ops.aten.mul(add_2, mul_2)
+        return mul
+    
+    @staticmethod
+    def replacement(a, b, c, d, e):
+        return triton_xmlcnn_loss(a, b, c, d, e)
+
+
+class MMDpReLUBP(FusionPatternBase):
+    @staticmethod
+    def pattern(a, b, c, d):
+        mm = torch.ops.aten.mm(a, b)
+        mul1 = torch.ops.aten.mul(mm, c)
+        mul2 = torch.ops.aten.mul(mul1, 1.0)
+        ne = torch.ops.aten.ne(d, 0)
+        mul3 = torch.ops.aten.mul(mul2, ne)
+        return mul3
 
     @staticmethod
-    def replacement(grad_y, mask, scale):
-        grad_x = torch.ops.aten.mul(grad_y, mask)
-        grad_x = torch.ops.aten.mul(grad_x, scale)
-        return grad_x
+    def replacement(a, b, c, d):
+        return triton_mm_dp_relu_bp(a, b, c, d)
 
 
-class DecomposeThresholdBackward(DecomposeBase):
-    @staticmethod
-    def pattern(grad_y, threshold_output, threshold):
-        return torch.ops.aten.threshold_backward(grad_y, threshold_output, threshold)
-
-    @staticmethod
-    def replacement(grad_y, threshold_output, threshold):
-        mask = torch.ops.aten.ne(threshold_output, threshold)
-        return torch.ops.aten.mul(grad_y, mask)
-
-
-class DecompositionPass(PassBase):
+class TritonFusionPass(PassBase):
     """
-    Pass that decomposes operations to registered patterns
+    Pass that fuse the operators with registered patterns
     """
-    patterns = [DecomposeAddmm, ]
-    def __init__(self) -> None:
-        super().__init__()
-        self.modified = False
-        
+    patterns = [MMAddReLU, XMLCNNLoss]
+
     def call(self, graph_module: GraphModule) -> PassResult:
         # Run until no more matches happens
         num_matches = 1
         while (num_matches):
-            num_matches = 0
             for pattern in self.patterns:
                 matches = replace_pattern_with_filters(
                     graph_module,
@@ -95,7 +113,7 @@ class DecompositionPass(PassBase):
                     pattern.replacement,
                     [pattern.filter,]
                 )
-                num_matches += len(matches)
+                num_matches = len(matches)
         return PassResult(graph_module, True)
     
     # Pass require() function
@@ -116,6 +134,4 @@ class DecompositionPass(PassBase):
         legalize_graph(graph_module)
         graph.lint()
         graph.eliminate_dead_code()
-        # fill in the metadata
-        FakeTensorInfer(graph_module).infer() 
-        
+ 

@@ -19,6 +19,7 @@ from torch.fx.passes.infra.pass_base import PassBase, PassResult
 from torch.utils._python_dispatch import _pop_mode_temporarily, _len_torch_dispatch_stack
 from contextlib import nullcontext
 from torch.fx.passes.shape_prop import TensorMetadata
+from fx_plus.compiler.utils import inject_get_attr
 from functools import reduce
 
 ###############################################################################
@@ -29,7 +30,7 @@ import torch
 import re
 
 # 1. Eliminate suffix - using regexpression rule for elimination 
-# 2. Eliminate _
+# 2. Eliminate '_'
 # 3. Eliminate imme number, convert const to const_tensor
 # 4. View - calculate -1 in shapes
 class CanonizeRule:
@@ -57,12 +58,6 @@ class FrontendPass(PassBase):
         torch.ops.aten.expand
     ]
     
-    canonize_rules = [
-        CanonizeRule(
-            pattern=r'aten.(?P<op>[a-zA-Z_]\w*).(default|Scalar|Tensor|dim_IntList|int|dim)',
-            namespace=torch.ops.aten
-        )
-    ]
     def call(self, graph_module: GraphModule) -> PassResult | None:
         self.modified = False
         
@@ -95,9 +90,9 @@ class FrontendPass(PassBase):
         if node.op == "call_function" and node.target in self.transparent_nodes:
             node.replace_all_uses_with(node.args[0])
             return
-        
-        # Apply registered canonize rules
-        self.apply_canonize_rules(node)
+        if isinstance(node.target, torch._ops.OpOverload):
+            node.target = node.target.overloadpacket
+
     
     def apply_canonize_rules(self, node: fx.Node) -> None:
         """

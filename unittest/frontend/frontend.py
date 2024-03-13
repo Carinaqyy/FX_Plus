@@ -17,6 +17,7 @@ from fx_plus.compiler.passes import LocalCSE
 
 class Test1(Test1Impl):
     name = "Test1"
+    dtype = torch.float
     
     def get_sample_inputs(self):
         # generate the example inputs for profiling and verification
@@ -35,6 +36,7 @@ class Test1TB(UnitTestBase):
 
 class Test2(Test2Impl):
     name = "Test2"
+    dtype = torch.float
     
     def get_sample_inputs(self):
         # generate the example inputs for profiling and verification
@@ -56,6 +58,7 @@ class Test2TB(UnitTestBase):
 
 class Test3(Test3Impl):
     name = "Test3"
+    dtype = torch.float
     
     def get_sample_inputs(self):
         # generate the example inputs for profiling and verification
@@ -74,6 +77,7 @@ class Test3TB(UnitTestBase):
 
 class Test4(Test4Impl):
     name = "Test4"
+    dtype = torch.float
     
     def get_sample_inputs(self):
         # generate the example inputs for profiling and verification

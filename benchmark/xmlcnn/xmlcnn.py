@@ -138,8 +138,10 @@ if __name__ == '__main__':
     passes.append(LossEliminate())
     passes.append(FrontendPass())
     passes.append(DecompositionPass())
+
     passes.append(LocalCSE())
     passes.append(Reassociation())
+    
     passes.append(TritonFusionPass())
 
     

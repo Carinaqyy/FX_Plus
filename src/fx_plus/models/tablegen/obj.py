@@ -301,6 +301,11 @@ class tdModel(tdObj):
                 "    " + self.description[i:i+75].lstrip() 
                 for i in range(0, len(self.description), 75)]
             self.description = '\n'.join(lines)
+        
+        if "dtype" in self.attributes:
+            self.dtype = 'torch.' + re.sub(r'\s+', '', self.attributes["dtype"])
+        else:
+            self.dtype = 'torch.float'
     
     def create_frontend(self):
         """
@@ -333,9 +338,12 @@ class {self.name}({self.name}Impl):
     \"\"\"
 {self.description}
     \"\"\"        
+    name = "{self.name}"
+    dtype = {self.dtype}
         """ if self.description else f"""
 class {self.name}({self.name}Impl):
     name = "{self.name}"
+    dtype = {self.dtype}
     """
         
         init_func_str = f"""

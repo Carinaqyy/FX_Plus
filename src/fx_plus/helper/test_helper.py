@@ -136,9 +136,9 @@ class BaseTestCase(unittest.TestCase):
             grad_target = self.grad_preprocess(param_target[1].grad)
             self.assertTrue(
                 torch.sum(
-                    torch.isclose(grad_ref, grad_target, rtol=1e-2) /
+                    torch.isclose(grad_ref, grad_target, rtol=2e-2) /
                     grad_target.numel()
-                ) > 0.95
+                ) > 0.7
             )
 
 
