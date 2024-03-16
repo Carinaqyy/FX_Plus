@@ -29,28 +29,10 @@ import torch.fx as fx
 import torch
 import re
 
-# 1. Eliminate suffix - using regexpression rule for elimination 
+# 1. Eliminate suffix - OpOverload -> overloadpacket 
 # 2. Eliminate '_'
 # 3. Eliminate imme number, convert const to const_tensor
 # 4. View - calculate -1 in shapes
-class CanonizeRule:
-    def __init__(self, pattern, namespace, new_op_format="{}") -> None:
-        """
-        """
-        self.pattern = re.compile(pattern)
-        self.namespace = namespace
-        self.new_op_format = new_op_format
-    
-    def get_canonize_target(self, target_name: str):
-        match = re.search(self.pattern, target_name)
-        if not match: return
-        op = match.groupdict()["op"]
-        canonized_target = getattr(
-            self.namespace, self.new_op_format.format(op))
-        assert callable(canonized_target), \
-            f"{canonized_target} is not callable"
-        return canonized_target   
-        
 
 class FrontendPass(PassBase):
     transparent_nodes = [
@@ -90,24 +72,9 @@ class FrontendPass(PassBase):
         if node.op == "call_function" and node.target in self.transparent_nodes:
             node.replace_all_uses_with(node.args[0])
             return
+        # Remove the redundancy in the operator set
         if isinstance(node.target, torch._ops.OpOverload):
             node.target = node.target.overloadpacket
-
-    
-    def apply_canonize_rules(self, node: fx.Node) -> None:
-        """
-        Sequentially apply the canonize rules registed
-        """
-        if node.op != "call_function":
-            return
-        # Get target function
-        target_name = str(node.target)
-        
-        for rule in self.canonize_rules:
-            canonized_target = rule.get_canonize_target(target_name)
-            if canonized_target is not None:
-                node.target = canonized_target
-                break
     
 def eliminate_imme_value(module, graph):
     """
